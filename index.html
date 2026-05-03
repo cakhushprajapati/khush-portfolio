@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Khush Prajapati · Anaplan & EPM Consultant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: #1f2533;
+    --border2: #252d3d;
+    --accent: #3b82f6;
+    --accent2: #60a5fa;
+    --accent-glow: rgba(59,130,246,0.18);
+    --green: #22d3a4;
+    --green-glow: rgba(34,211,164,0.12);
+    --amber: #f59e0b;
+    --amber-glow: rgba(245,158,11,0.12);
+    --purple: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --muted2: #475569;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    grid-row: 1 / -1;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar-logo { padding: 28px 24px 20px; border-bottom: 1px solid var(--border); }
+  .logo-badge { display: inline-flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    color: #fff; flex-shrink: 0;
+  }
+  .logo-text { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text); }
+  .logo-sub { font-size: 10px; color: var(--muted); font-family: var(--font-mono); letter-spacing: 0.08em; margin-top: 2px; text-transform: uppercase; }
+  .sidebar-nav { padding: 20px 12px; flex: 1; }
+  .nav-section-label {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted2);
+    padding: 0 12px; margin-bottom: 6px; margin-top: 16px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 7px; font-size: 13.5px;
+    color: var(--muted); cursor: pointer; transition: all 0.18s;
+    text-decoration: none; margin-bottom: 2px; border: 1px solid transparent;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--accent-glow); color: var(--accent2); border-color: rgba(59,130,246,0.2); }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.5; flex-shrink: 0; }
+  .nav-item.active .nav-dot { opacity: 1; background: var(--accent); }
+  .sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-glow); border: 1px solid rgba(34,211,164,0.2);
+    border-radius: 20px; padding: 4px 10px;
+    font-size: 11px; font-family: var(--font-mono); color: var(--green);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 40px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-breadcrumb { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .breadcrumb-sep { color: var(--border2); }
+  .breadcrumb-current { color: var(--text); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top-badge { font-family: var(--font-mono); font-size: 11px; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border2); color: var(--muted); }
+  .top-badge.highlight { border-color: rgba(59,130,246,0.3); color: var(--accent2); background: var(--accent-glow); }
+
+  /* ── MAIN ── */
+  .main { padding: 40px; display: flex; flex-direction: column; gap: 32px; }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 48px 48px 40px;
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; top: -60px; right: -60px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: ''; position: absolute; bottom: -40px; left: 200px;
+    width: 240px; height: 240px;
+    background: radial-gradient(circle, rgba(167,139,250,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hero-eyebrow::before { content: ''; display: block; width: 20px; height: 1px; background: var(--accent); }
+  .hero-name {
+    font-family: var(--font-display); font-size: clamp(36px,5vw,58px);
+    font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 8px;
+  }
+  .hero-name span {
+    background: linear-gradient(90deg, var(--accent2), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .hero-title { font-family: var(--font-mono); font-size: 14px; color: var(--muted); margin-bottom: 20px; font-weight: 300; }
+  .hero-desc { font-size: 15px; line-height: 1.7; color: #94a3b8; max-width: 600px; margin-bottom: 32px; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    font-family: var(--font-mono); font-size: 11px; padding: 5px 12px;
+    border-radius: 4px; border: 1px solid var(--border2); color: var(--muted);
+    letter-spacing: 0.04em; transition: all 0.15s;
+  }
+  .tag:hover { border-color: var(--accent); color: var(--accent2); background: var(--accent-glow); }
+  .tag.green { border-color: rgba(34,211,164,0.3); color: var(--green); background: var(--green-glow); }
+  .tag.amber { border-color: rgba(245,158,11,0.3); color: var(--amber); background: var(--amber-glow); }
+  .tag.purple { border-color: rgba(167,139,250,0.3); color: var(--purple); background: rgba(167,139,250,0.08); }
+
+  /* ── STATS ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px; transition: border-color 0.2s, transform 0.2s;
+  }
+  .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .stat-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted2); margin-bottom: 10px; }
+  .stat-value { font-family: var(--font-display); font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+  .stat-value.blue { color: var(--accent2); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-sub { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── SECTION HEADER ── */
+  .section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .section-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+  /* ── EXPERIENCE ── */
+  .experience-list { display: flex; flex-direction: column; gap: 16px; }
+  .exp-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 26px 28px;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .exp-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: linear-gradient(180deg, var(--accent), var(--purple));
+    border-radius: 3px 0 0 3px;
+  }
+  .exp-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .exp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 4px; }
+  .exp-role { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+  .exp-company { font-size: 13px; color: var(--accent2); font-family: var(--font-mono); margin-top: 4px; }
+  .exp-period {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--muted); background: var(--surface2);
+    border: 1px solid var(--border); padding: 4px 10px; border-radius: 5px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .exp-bullets { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 7px; }
+  .exp-bullets li { font-size: 13px; color: #94a3b8; line-height: 1.65; padding-left: 18px; position: relative; }
+  .exp-bullets li::before { content: '▹'; position: absolute; left: 0; color: var(--accent); font-size: 11px; top: 2px; }
+  .exp-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
+  .exp-tag { font-family: var(--font-mono); font-size: 10px; padding: 2px 8px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+
+  /* ── SKILLS ── */
+  .skills-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .skill-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+  .skill-panel-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .skill-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .skill-item:last-child { margin-bottom: 0; }
+  .skill-row { display: flex; justify-content: space-between; align-items: center; }
+  .skill-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .skill-pct { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .bar-track { height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .bar-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transform-origin: left;
+    animation: barGrow 1.2s cubic-bezier(0.4,0,0.2,1) forwards;
+    transform: scaleX(0);
+  }
+  .bar-fill.green { background: linear-gradient(90deg, #16a085, var(--green)); }
+  .bar-fill.purple { background: linear-gradient(90deg, #7c3aed, var(--purple)); }
+  .bar-fill.amber { background: linear-gradient(90deg, #d97706, var(--amber)); }
+  @keyframes barGrow { to { transform: scaleX(1); } }
+
+  /* ── PROJECTS ── */
+  .projects-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .project-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px; display: flex; flex-direction: column; gap: 14px;
+    transition: all 0.2s;
+  }
+  .project-card:hover { border-color: var(--border2); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .project-header { display: flex; align-items: flex-start; justify-content: space-between; }
+  .project-icon { width: 40px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .project-icon.blue { background: var(--accent-glow); border: 1px solid rgba(59,130,246,0.2); }
+  .project-icon.green { background: var(--green-glow); border: 1px solid rgba(34,211,164,0.2); }
+  .project-icon.amber { background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.2); }
+  .project-icon.purple { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); }
+  .project-type { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted2); background: var(--surface2); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); }
+  .project-name { font-family: var(--font-display); font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+  .project-desc { font-size: 12.5px; color: #64748b; line-height: 1.65; flex: 1; }
+  .project-stack { display: flex; flex-wrap: wrap; gap: 5px; }
+  .stack-tag { font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+  .project-metric { font-family: var(--font-mono); font-size: 11px; color: var(--green); }
+
+  /* ── CERTIFICATIONS ── */
+  .cert-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+  .cert-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 24px; display: flex; align-items: center; gap: 18px; transition: border-color 0.2s;
+  }
+  .cert-card:hover { border-color: var(--accent); }
+  .cert-badge { width: 48px; height: 48px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--purple)); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .cert-info { flex: 1; }
+  .cert-name { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; margin-bottom: 3px; }
+  .cert-issuer { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .cert-year { font-family: var(--font-mono); font-size: 11px; color: var(--accent2); background: var(--accent-glow); border: 1px solid rgba(59,130,246,0.2); padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+
+  /* ── CODE ── */
+  .code-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .code-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface2); }
+  .code-dots { display: flex; gap: 6px; }
+  .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .code-dot:nth-child(1){background:#ff5f56}
+  .code-dot:nth-child(2){background:#ffbd2e}
+  .code-dot:nth-child(3){background:#27c93f}
+  .code-filename { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .code-lang { font-family: var(--font-mono); font-size: 10px; color: var(--accent2); background: var(--accent-glow); border: 1px solid rgba(59,130,246,0.2); padding: 2px 8px; border-radius: 4px; }
+  pre { padding: 24px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.8; color: #94a3b8; overflow-x: auto; }
+  .kw{color:#818cf8} .fn{color:#34d399} .str{color:#fbbf24} .cm{color:#475569} .cls{color:#a78bfa} .num{color:#f97316} .var{color:#e2e8f0}
+
+  /* ── AWARDS ── */
+  .awards-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+  .award-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 22px; display: flex; align-items: center; gap: 14px;
+    transition: border-color 0.2s;
+  }
+  .award-card:hover { border-color: var(--amber); }
+  .award-icon { font-size: 24px; flex-shrink: 0; }
+  .award-text { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.4; }
+  .award-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* ── FOOTER ── */
+  .footer {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 20px 40px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .footer-left { font-family: var(--font-mono); font-size: 11px; color: var(--muted2); }
+  .footer-links { display: flex; gap: 20px; }
+  .footer-link { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .footer-link:hover { color: var(--accent2); }
+
+  /* ── ANIMATIONS ── */
+  .fade-up { opacity: 0; transform: translateY(16px); animation: fadeUp 0.6s ease forwards; }
+  @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+  .fade-up:nth-child(1){animation-delay:0.05s}
+  .fade-up:nth-child(2){animation-delay:0.12s}
+  .fade-up:nth-child(3){animation-delay:0.18s}
+  .fade-up:nth-child(4){animation-delay:0.24s}
+  .fade-up:nth-child(5){animation-delay:0.30s}
+  .fade-up:nth-child(6){animation-delay:0.36s}
+
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+  @media(max-width:960px){
+    .shell{grid-template-columns:1fr}
+    .sidebar{display:none}
+    .main{padding:24px}
+    .stats-row{grid-template-columns:repeat(2,1fr)}
+    .projects-grid{grid-template-columns:1fr 1fr}
+    .skills-grid{grid-template-columns:1fr}
+    .cert-grid{grid-template-columns:1fr}
+    .awards-grid{grid-template-columns:1fr}
+    .topbar{padding:0 24px}
+  }
+  @media(max-width:600px){
+    .projects-grid{grid-template-columns:1fr}
+    .stats-row{grid-template-columns:1fr 1fr}
+    .hero{padding:32px 24px}
+    .footer{flex-direction:column;gap:12px;align-items:flex-start}
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge">
+        <div class="logo-icon">KP</div>
+        <div>
+          <div class="logo-text">Khush Prajapati</div>
+          <div class="logo-sub">CA · EPM Consultant</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <a href="#hero" class="nav-item active"><span class="nav-dot"></span> Dashboard</a>
+      <a href="#stats" class="nav-item"><span class="nav-dot"></span> Metrics</a>
+
+      <div class="nav-section-label">Profile</div>
+      <a href="#experience" class="nav-item"><span class="nav-dot"></span> Experience</a>
+      <a href="#skills" class="nav-item"><span class="nav-dot"></span> Skills</a>
+      <a href="#projects" class="nav-item"><span class="nav-dot"></span> Projects</a>
+      <a href="#certifications" class="nav-item"><span class="nav-dot"></span> Certifications</a>
+      <a href="#awards" class="nav-item"><span class="nav-dot"></span> Awards</a>
+
+      <div class="nav-section-label">Code</div>
+      <a href="#python" class="nav-item"><span class="nav-dot"></span> Python Integration</a>
+
+      <div class="nav-section-label">Contact</div>
+      <a href="#contact" class="nav-item"><span class="nav-dot"></span> Get In Touch</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        Open to Opportunities
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── RIGHT COLUMN ── -->
+  <div style="display:flex;flex-direction:column;min-height:100vh;">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>portfolio</span>
+        <span class="breadcrumb-sep">/</span>
+        <span>khush-prajapati</span>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">overview</span>
+      </div>
+      <div class="topbar-right">
+        <span class="top-badge">Anaplan L3 · Certified Model Builder</span>
+        <span class="top-badge highlight">● Polestar Analytics · Noida</span>
+      </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="main" id="hero">
+
+      <!-- HERO -->
+      <section class="hero fade-up">
+        <div class="hero-eyebrow">Finance & EPM Consultant · Anaplan Specialist · Chartered Accountant</div>
+        <h1 class="hero-name">Khush Prajapati<br><span>Turning Data Into Decisions</span></h1>
+        <p class="hero-title">// Anaplan · FP&amp;A · S&amp;OP · Financial Modelling &amp; Valuation · EPM</p>
+        <p class="hero-desc">
+          Finance and EPM Consultant with strong expertise in Anaplan and financial analytics. Proven track record in leading budgeting, forecasting, and consolidation implementations across large enterprises — from Japan's largest automotive parts manufacturers to asset management firms. Skilled in translating complex business requirements into scalable EPM solutions.
+        </p>
+        <div class="hero-tags">
+          <span class="tag green">Anaplan L3 Certified</span>
+          <span class="tag green">Certified Model Builder</span>
+          <span class="tag">FP&amp;A</span>
+          <span class="tag">S&amp;OP Planning</span>
+          <span class="tag">Financial Modelling</span>
+          <span class="tag amber">Budgeting &amp; Forecasting</span>
+          <span class="tag amber">Valuation (FM&amp;V)</span>
+          <span class="tag purple">Solution Architect</span>
+          <span class="tag">UAT · SIT</span>
+          <span class="tag">Chartered Accountant</span>
+          <span class="tag">SAP · Tally</span>
+          <span class="tag">Data Analytics</span>
+        </div>
+      </section>
+
+      <!-- STATS -->
+      <section id="stats">
+        <div class="stats-row">
+          <div class="stat-card fade-up">
+            <div class="stat-label">Total Experience</div>
+            <div class="stat-value blue">6+</div>
+            <div class="stat-sub">Years in Finance &amp; EPM</div>
+          </div>
+          <div class="stat-card fade-up">
+            <div class="stat-label">Anaplan Experience</div>
+            <div class="stat-value green">2.5+</div>
+            <div class="stat-sub">End-to-end implementations</div>
+          </div>
+          <div class="stat-card fade-up">
+            <div class="stat-label">System Optimisation</div>
+            <div class="stat-value amber">45%</div>
+            <div class="stat-sub">Space reduction at PwC</div>
+          </div>
+          <div class="stat-card fade-up">
+            <div class="stat-label">Audit Coverage</div>
+            <div class="stat-value purple">₹1K+Cr</div>
+            <div class="stat-sub">Listed company turnover</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EXPERIENCE -->
+      <section id="experience">
+        <div class="section-header">
+          <h2 class="section-title">Work Experience</h2>
+          <span class="section-meta">// 3 roles · 6+ years</span>
+        </div>
+        <div class="experience-list">
+
+          <div class="exp-card fade-up">
+            <div class="exp-header">
+              <div>
+                <div class="exp-role">Consultant · FP&amp;A – EPM</div>
+                <div class="exp-company">Polestar Analytics, Noida</div>
+              </div>
+              <span class="exp-period">Jan 2025 – Present</span>
+            </div>
+            <ul class="exp-bullets">
+              <li>Leading multiple projects as Solution Architect and Functional Consultant, overseeing end-to-end solution delivery.</li>
+              <li>Analysed and documented business requirements to define development scope aligned with stakeholder goals.</li>
+              <li>Designed and developed EPM solutions based on technical and functional requirements; created design specs, test plans, and training guides.</li>
+              <li>Facilitated sessions on application/process design and led key work streams including UAT and end-user training.</li>
+              <li>Delivered Anaplan implementations for Procurement Planning (S&amp;OP) in confectionery manufacturing and Financial Modelling &amp; Valuation (FM&amp;V) in asset management.</li>
+              <li>Resolved complex application issues and supported financial data conversion and reconciliation.</li>
+            </ul>
+            <div class="exp-tags">
+              <span class="exp-tag">Anaplan</span>
+              <span class="exp-tag">S&amp;OP</span>
+              <span class="exp-tag">FM&amp;V</span>
+              <span class="exp-tag">Solution Architecture</span>
+              <span class="exp-tag">UAT</span>
+              <span class="exp-tag">EPM</span>
+            </div>
+          </div>
+
+          <div class="exp-card fade-up">
+            <div class="exp-header">
+              <div>
+                <div class="exp-role">Associate · FP&amp;A – EPM</div>
+                <div class="exp-company">PwC Services LLP, Mumbai</div>
+              </div>
+              <span class="exp-period">Sep 2022 – Jan 2025</span>
+            </div>
+            <ul class="exp-bullets">
+              <li>Automated the Profit &amp; Loss statement in Anaplan for budgeting and forecasting for one of Japan's largest automotive parts manufacturers.</li>
+              <li>Optimised the existing system, reducing space utilisation by 45%.</li>
+              <li>Responsible for decision-making across QA and Development teams, ensuring high delivery standards.</li>
+              <li>Handled System Integration Testing (SIT), User Acceptance Testing (UAT), and rollout across multiple tracks.</li>
+              <li>Engaged with clients to understand requirements and delivered tailored solutions; built demo models for business development.</li>
+              <li>Delivered end-to-end Anaplan implementation for automotive parts manufacturer (FP&amp;A) in the manufacturing industry.</li>
+            </ul>
+            <div class="exp-tags">
+              <span class="exp-tag">Anaplan</span>
+              <span class="exp-tag">P&amp;L Automation</span>
+              <span class="exp-tag">FP&amp;A</span>
+              <span class="exp-tag">SIT &amp; UAT</span>
+              <span class="exp-tag">Automotive</span>
+              <span class="exp-tag">PwC</span>
+            </div>
+          </div>
+
+          <div class="exp-card fade-up">
+            <div class="exp-header">
+              <div>
+                <div class="exp-role">Article Trainee</div>
+                <div class="exp-company">B&amp;M, Chartered Accountants, Mumbai</div>
+              </div>
+              <span class="exp-period">Sep 2018 – Sep 2021</span>
+            </div>
+            <ul class="exp-bullets">
+              <li>Analysed financial statements performing ratio and variance analysis to derive actionable insights.</li>
+              <li>Conducted statutory and internal audits for listed companies with ₹1,000+ Cr turnover.</li>
+              <li>Assessed financial controls, identified gaps, and recommended improvements.</li>
+              <li>Led audit teams ensuring compliance with regulatory standards.</li>
+              <li>Key clients: Oil &amp; Gas Co., Pneumatic Tools Manufacturer, and multiple government and listed companies.</li>
+            </ul>
+            <div class="exp-tags">
+              <span class="exp-tag">Statutory Audit</span>
+              <span class="exp-tag">Internal Audit</span>
+              <span class="exp-tag">Financial Analysis</span>
+              <span class="exp-tag">Variance Analysis</span>
+              <span class="exp-tag">Compliance</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SKILLS -->
+      <section id="skills">
+        <div class="section-header">
+          <h2 class="section-title">Technical Skills</h2>
+          <span class="section-meta">// proficiency index</span>
+        </div>
+        <div class="skills-grid">
+
+          <div class="skill-panel fade-up">
+            <div class="skill-panel-title">Anaplan &amp; EPM</div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Anaplan Model Building</span><span class="skill-pct">95%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="animation-delay:0.3s;width:95%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Budgeting &amp; Forecasting (FP&amp;A)</span><span class="skill-pct">93%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="animation-delay:0.4s;width:93%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">S&amp;OP / Procurement Planning</span><span class="skill-pct">88%</span></div>
+              <div class="bar-track"><div class="bar-fill green" style="animation-delay:0.5s;width:88%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Financial Modelling &amp; Valuation</span><span class="skill-pct">87%</span></div>
+              <div class="bar-track"><div class="bar-fill green" style="animation-delay:0.6s;width:87%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Solution Architecture &amp; UAT/SIT</span><span class="skill-pct">90%</span></div>
+              <div class="bar-track"><div class="bar-fill purple" style="animation-delay:0.7s;width:90%"></div></div>
+            </div>
+          </div>
+
+          <div class="skill-panel fade-up">
+            <div class="skill-panel-title">Finance &amp; Tools</div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Financial Analysis &amp; Statements</span><span class="skill-pct">95%</span></div>
+              <div class="bar-track"><div class="bar-fill purple" style="animation-delay:0.3s;width:95%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">MS Excel (Advanced)</span><span class="skill-pct">92%</span></div>
+              <div class="bar-track"><div class="bar-fill amber" style="animation-delay:0.4s;width:92%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Data Analytics</span><span class="skill-pct">85%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="animation-delay:0.5s;width:85%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">SAP</span><span class="skill-pct">75%</span></div>
+              <div class="bar-track"><div class="bar-fill green" style="animation-delay:0.6s;width:75%"></div></div>
+            </div>
+            <div class="skill-item">
+              <div class="skill-row"><span class="skill-name">Tally</span><span class="skill-pct">80%</span></div>
+              <div class="bar-track"><div class="bar-fill amber" style="animation-delay:0.7s;width:80%"></div></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- PROJECTS -->
+      <section id="projects">
+        <div class="section-header">
+          <h2 class="section-title">Featured Projects</h2>
+          <span class="section-meta">// real-world implementations</span>
+        </div>
+        <div class="projects-grid">
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon blue">🏭</div>
+              <span class="project-type">Automotive · FP&amp;A</span>
+            </div>
+            <div class="project-name">P&amp;L Automation — Japan's Largest Auto Parts Maker</div>
+            <p class="project-desc">Automated the full Profit &amp; Loss statement in Anaplan for budgeting and forecasting. Optimised the existing model architecture, reducing space utilisation by 45% at PwC.</p>
+            <div class="project-stack">
+              <span class="stack-tag">Anaplan</span>
+              <span class="stack-tag">FP&amp;A</span>
+              <span class="stack-tag">P&amp;L Automation</span>
+              <span class="stack-tag">PwC</span>
+            </div>
+            <div class="project-metric">↓ 45% space utilisation reduction</div>
+          </div>
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon green">🍫</div>
+              <span class="project-type">S&amp;OP · Procurement</span>
+            </div>
+            <div class="project-name">S&amp;OP Procurement Planning — Confectionery Mfg.</div>
+            <p class="project-desc">End-to-end Anaplan implementation for Procurement Planning within an S&amp;OP framework for a confectionery manufacturer. Led solution design, requirements gathering, testing, and user training.</p>
+            <div class="project-stack">
+              <span class="stack-tag">Anaplan</span>
+              <span class="stack-tag">S&amp;OP</span>
+              <span class="stack-tag">Procurement</span>
+              <span class="stack-tag">Polestar Analytics</span>
+            </div>
+            <div class="project-metric">↑ Integrated end-to-end supply planning</div>
+          </div>
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon purple">📈</div>
+              <span class="project-type">Asset Management · FM&amp;V</span>
+            </div>
+            <div class="project-name">Financial Modelling &amp; Valuation — Asset Management</div>
+            <p class="project-desc">Designed and delivered FM&amp;V solutions in Anaplan for an asset management client. Covered financial modelling, valuation workflows, and stakeholder reporting with reconciliation support.</p>
+            <div class="project-stack">
+              <span class="stack-tag">Anaplan</span>
+              <span class="stack-tag">FM&amp;V</span>
+              <span class="stack-tag">Valuation</span>
+              <span class="stack-tag">Polestar Analytics</span>
+            </div>
+            <div class="project-metric">↑ Automated valuation &amp; reporting</div>
+          </div>
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon amber">🔍</div>
+              <span class="project-type">Audit · Finance</span>
+            </div>
+            <div class="project-name">Statutory &amp; Internal Audits — Listed Companies</div>
+            <p class="project-desc">Led statutory and internal audits for listed companies with ₹1,000+ Cr turnover including Oil &amp; Gas and Pneumatic Tools. Delivered ratio &amp; variance analysis and compliance reporting.</p>
+            <div class="project-stack">
+              <span class="stack-tag">Statutory Audit</span>
+              <span class="stack-tag">Internal Audit</span>
+              <span class="stack-tag">Compliance</span>
+              <span class="stack-tag">B&amp;M CA</span>
+            </div>
+            <div class="project-metric">↑ ₹1,000+ Cr turnover covered</div>
+          </div>
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon blue">🎯</div>
+              <span class="project-type">Business Dev · Demo</span>
+            </div>
+            <div class="project-name">Pre-Sales Demo Models — PwC EPM Practice</div>
+            <p class="project-desc">Built Anaplan demo models for prospective clients to support PwC's EPM business development, showcasing budgeting, forecasting, and connected planning capabilities to drive new business.</p>
+            <div class="project-stack">
+              <span class="stack-tag">Anaplan</span>
+              <span class="stack-tag">Connected Planning</span>
+              <span class="stack-tag">Demo Models</span>
+              <span class="stack-tag">PwC</span>
+            </div>
+            <div class="project-metric">↑ Client acquisition pipeline support</div>
+          </div>
+
+          <div class="project-card fade-up">
+            <div class="project-header">
+              <div class="project-icon green">📋</div>
+              <span class="project-type">EPM · Multi-track</span>
+            </div>
+            <div class="project-name">Multi-Track Rollout &amp; Quality Management</div>
+            <p class="project-desc">Managed end-to-end SIT, UAT, and rollout across multiple workstreams. Responsible for quality assurance decisions and created design specs, test plans, and training documentation.</p>
+            <div class="project-stack">
+              <span class="stack-tag">SIT</span>
+              <span class="stack-tag">UAT</span>
+              <span class="stack-tag">Rollout</span>
+              <span class="stack-tag">QA</span>
+              <span class="stack-tag">Documentation</span>
+            </div>
+            <div class="project-metric">↑ Client Appreciation Award received</div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- CERTIFICATIONS -->
+      <section id="certifications">
+        <div class="section-header">
+          <h2 class="section-title">Certifications &amp; Education</h2>
+          <span class="section-meta">// verified credentials</span>
+        </div>
+        <div class="cert-grid">
+          <div class="cert-card fade-up">
+            <div class="cert-badge">🏅</div>
+            <div class="cert-info">
+              <div class="cert-name">L3 Certification — Anaplan</div>
+              <div class="cert-issuer">ANAPLAN · Official Certification</div>
+            </div>
+            <div class="cert-year">Active</div>
+          </div>
+          <div class="cert-card fade-up">
+            <div class="cert-badge">🎖️</div>
+            <div class="cert-info">
+              <div class="cert-name">Certified Model Builder — Anaplan</div>
+              <div class="cert-issuer">ANAPLAN · Official Certification</div>
+            </div>
+            <div class="cert-year">Active</div>
+          </div>
+          <div class="cert-card fade-up">
+            <div class="cert-badge">📗</div>
+            <div class="cert-info">
+              <div class="cert-name">Excel Skills for Business</div>
+              <div class="cert-issuer">Macquarie University · Coursera</div>
+            </div>
+            <div class="cert-year">Completed</div>
+          </div>
+          <div class="cert-card fade-up">
+            <div class="cert-badge">⚖️</div>
+            <div class="cert-info">
+              <div class="cert-name">Chartered Accountant (CA Final)</div>
+              <div class="cert-issuer">ICAI · Institute of Chartered Accountants of India</div>
+            </div>
+            <div class="cert-year">May 2022</div>
+          </div>
+          <div class="cert-card fade-up">
+            <div class="cert-badge">🎓</div>
+            <div class="cert-info">
+              <div class="cert-name">Bachelor of Commerce</div>
+              <div class="cert-issuer">MDS University, Ajmer</div>
+            </div>
+            <div class="cert-year">Apr 2020</div>
+          </div>
+          <div class="cert-card fade-up">
+            <div class="cert-badge">📜</div>
+            <div class="cert-info">
+              <div class="cert-name">CA Intermediate &amp; CPT</div>
+              <div class="cert-issuer">ICAI · CA Intermediate May 2018 · CPT June 2017</div>
+            </div>
+            <div class="cert-year">2017–18</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AWARDS -->
+      <section id="awards">
+        <div class="section-header">
+          <h2 class="section-title">Awards &amp; Achievements</h2>
+          <span class="section-meta">// recognition</span>
+        </div>
+        <div class="awards-grid">
+          <div class="award-card fade-up">
+            <div class="award-icon">🏆</div>
+            <div>
+              <div class="award-text">Delivery Excellence Award</div>
+              <div class="award-sub">For delivering the project efficiently</div>
+            </div>
+          </div>
+          <div class="award-card fade-up">
+            <div class="award-icon">🌟</div>
+            <div>
+              <div class="award-text">Client Appreciation Award</div>
+              <div class="award-sub">For the successful rollout of the project</div>
+            </div>
+          </div>
+          <div class="award-card fade-up">
+            <div class="award-icon">🎤</div>
+            <div>
+              <div class="award-text">Best PPT Presenter</div>
+              <div class="award-sub">Winner at GMCS</div>
+            </div>
+          </div>
+          <div class="award-card fade-up">
+            <div class="award-icon">🏅</div>
+            <div>
+              <div class="award-text">House Sports Captain</div>
+              <div class="award-sub">Leadership recognition during SSC</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PYTHON CODE SHOWCASE -->
+      <section id="python">
+        <div class="section-header">
+          <h2 class="section-title">Python · Anaplan API Integration</h2>
+          <span class="section-meta">// live code sample</span>
+        </div>
+        <div class="code-section fade-up">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+            </div>
+            <span class="code-filename">anaplan_pl_loader.py</span>
+            <span class="code-lang">Python 3.11</span>
+          </div>
+          <pre><span class="cm"># Anaplan REST API — Automated P&amp;L Data Loader</span>
+<span class="cm"># Automates monthly actuals upload &amp; import action trigger</span>
+<span class="cm"># Use case: FP&amp;A Budgeting &amp; Forecasting (Automotive Mfg.)</span>
+
+<span class="kw">import</span> <span class="var">requests</span>, <span class="var">pandas</span> <span class="kw">as</span> <span class="var">pd</span>
+<span class="kw">from</span> <span class="var">base64</span> <span class="kw">import</span> <span class="var">b64encode</span>
+<span class="kw">from</span> <span class="var">datetime</span> <span class="kw">import</span> <span class="var">datetime</span>
+
+<span class="cls">class</span> <span class="fn">AnaplanConnector</span>:
+    <span class="str">"""Handles auth, file upload &amp; action execution via Anaplan REST API."""</span>
+
+    BASE_URL = <span class="str">"https://api.anaplan.com/2/0/workspaces"</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="var">self</span>, workspace_id, model_id, username, password):
+        <span class="var">self</span>.workspace_id = workspace_id
+        <span class="var">self</span>.model_id     = model_id
+        <span class="var">self</span>.session      = <span class="var">requests</span>.<span class="fn">Session</span>()
+        <span class="var">self</span>.session.headers[<span class="str">"Authorization"</span>] = <span class="str">"Basic "</span> + <span class="fn">b64encode</span>(
+            <span class="str">f"</span><span class="var">{username}</span><span class="str">:</span><span class="var">{password}</span><span class="str">"</span>.<span class="fn">encode</span>()
+        ).<span class="fn">decode</span>()
+
+    <span class="kw">def</span> <span class="fn">upload_file</span>(<span class="var">self</span>, file_id: <span class="var">str</span>, df: <span class="var">pd</span>.DataFrame) -> <span class="var">bool</span>:
+        <span class="str">"""Upload a Pandas DataFrame as CSV to an Anaplan file."""</span>
+        csv_bytes = df.<span class="fn">to_csv</span>(index=<span class="kw">False</span>).<span class="fn">encode</span>(<span class="str">"utf-8"</span>)
+        url = (
+            <span class="str">f"</span><span class="var">{self.BASE_URL}</span><span class="str">/</span><span class="var">{self.workspace_id}</span><span class="str">/models/"</span>
+            <span class="str">f"</span><span class="var">{self.model_id}</span><span class="str">/files/</span><span class="var">{file_id}</span><span class="str">"</span>
+        )
+        resp = <span class="var">self</span>.session.<span class="fn">put</span>(
+            url, data=csv_bytes,
+            headers={<span class="str">"Content-Type"</span>: <span class="str">"application/octet-stream"</span>}
+        )
+        <span class="kw">return</span> resp.status_code == <span class="num">200</span>
+
+    <span class="kw">def</span> <span class="fn">run_import</span>(<span class="var">self</span>, action_id: <span class="var">str</span>) -> <span class="var">str</span>:
+        <span class="str">"""Trigger an Anaplan import action and return task state."""</span>
+        url = (
+            <span class="str">f"</span><span class="var">{self.BASE_URL}</span><span class="str">/</span><span class="var">{self.workspace_id}</span><span class="str">/models/"</span>
+            <span class="str">f"</span><span class="var">{self.model_id}</span><span class="str">/actions/</span><span class="var">{action_id}</span><span class="str">/tasks"</span>
+        )
+        resp = <span class="var">self</span>.session.<span class="fn">post</span>(url, json={<span class="str">"localeName"</span>: <span class="str">"en_US"</span>})
+        <span class="kw">return</span> resp.<span class="fn">json</span>()[<span class="str">"task"</span>][<span class="str">"taskState"</span>]
+
+<span class="cm"># ── Monthly P&amp;L Actuals Upload ─────────────────────────────</span>
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    conn = <span class="fn">AnaplanConnector</span>(
+        workspace_id = <span class="str">"8a81b09..."</span>,
+        model_id     = <span class="str">"FC3A29E..."</span>,
+        username     = <span class="str">"khush@company.com"</span>,
+        password     = <span class="str">"••••••••"</span>
+    )
+
+    <span class="cm"># Load and clean actuals from ERP export</span>
+    period = <span class="var">datetime</span>.<span class="fn">now</span>().<span class="fn">strftime</span>(<span class="str">"%Y_%m"</span>)
+    df = pd.<span class="fn">read_csv</span>(<span class="str">f"actuals_{period}.csv"</span>)
+    df[<span class="str">"Amount"</span>]    = df[<span class="str">"Amount"</span>].<span class="fn">round</span>(<span class="num">2</span>)
+    df = df.<span class="fn">dropna</span>(subset=[<span class="str">"CostCenter"</span>, <span class="str">"GLAccount"</span>])
+
+    <span class="fn">print</span>(<span class="str">f"Uploading {len(df):,} rows to Anaplan..."</span>)
+    <span class="kw">if</span> conn.<span class="fn">upload_file</span>(<span class="str">"112000000032"</span>, df):
+        state = conn.<span class="fn">run_import</span>(<span class="str">"113000000021"</span>)
+        <span class="fn">print</span>(<span class="str">f"✓ Import complete — Task state: {state}"</span>)
+    <span class="kw">else</span>:
+        <span class="fn">print</span>(<span class="str">"✗ Upload failed — verify credentials or file ID"</span>)
+</pre>
+        </div>
+      </section>
+
+      <!-- CONTACT -->
+      <section id="contact">
+        <div class="section-header">
+          <h2 class="section-title">Get In Touch</h2>
+          <span class="section-meta">// let's build something</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:36px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;" class="fade-up">
+          <div>
+            <div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin-bottom:8px;">Open to EPM &amp; Anaplan Opportunities</div>
+            <div style="font-size:14px;color:#64748b;max-width:480px;line-height:1.6;">Interested in connected planning, FP&amp;A implementations, or EPM transformations? I'd love to connect.</div>
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:5px;">
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);">📧 cakhushprajapati@gmail.com</div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);">📞 +91 70142 33125</div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);">📍 Noida, India</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <a href="mailto:cakhushprajapati@gmail.com"
+               style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:8px;background:var(--accent);color:#fff;font-family:var(--font-mono);font-size:13px;text-decoration:none;font-weight:500;transition:background 0.15s;"
+               onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='var(--accent)'">
+              📧 Email Me
+            </a>
+            <a href="https://www.linkedin.com/in/khushprajapati" target="_blank"
+               style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:8px;background:var(--surface2);color:var(--text);font-family:var(--font-mono);font-size:13px;text-decoration:none;border:1px solid var(--border2);transition:border-color 0.15s;"
+               onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+              LinkedIn →
+            </a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <div class="footer-left">© 2025 Khush Prajapati · CA · Anaplan L3 Certified · EPM Consultant</div>
+      <div class="footer-links">
+        <a class="footer-link" href="https://www.linkedin.com/in/khushprajapati" target="_blank">LinkedIn</a>
+        <a class="footer-link" href="mailto:cakhushprajapati@gmail.com">Email</a>
+      </div>
+    </footer>
+
+  </div><!-- end right col -->
+</div><!-- end shell -->
+
+<script>
+  // Active nav on scroll
+  const sections = document.querySelectorAll('section[id], main[id]');
+  const navItems = document.querySelectorAll('.nav-item');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navItems.forEach(n => n.classList.remove('active'));
+        const match = document.querySelector(`.nav-item[href="#${entry.target.id}"]`);
+        if (match) match.classList.add('active');
+      }
+    });
+  }, { threshold: 0.25 });
+  sections.forEach(s => observer.observe(s));
+
+  // Animate skill bars on scroll
+  const bars = document.querySelectorAll('.bar-fill');
+  const barObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.style.animationPlayState = 'running';
+    });
+  }, { threshold: 0.1 });
+  bars.forEach(b => {
+    b.style.animationPlayState = 'paused';
+    barObs.observe(b);
+  });
+</script>
+
+</body>
+</html>
