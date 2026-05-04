@@ -374,6 +374,9 @@
       <div class="nav-section-label">Code</div>
       <a href="#python" class="nav-item"><span class="nav-dot"></span> Python Integration</a>
 
+      <div class="nav-section-label">Toolkit</div>
+      <a href="#toolkit" class="nav-item"><span class="nav-dot"></span> Size Estimator</a>
+
       <div class="nav-section-label">Contact</div>
       <a href="#contact" class="nav-item"><span class="nav-dot"></span> Get In Touch</a>
     </nav>
@@ -891,6 +894,125 @@
         </div>
       </section>
 
+      <!-- TOOLKIT -->
+      <section id="toolkit">
+        <div class="section-header">
+          <h2 class="section-title">Model Size Estimator</h2>
+          <span class="section-meta">// anaplan toolkit · live analysis</span>
+        </div>
+
+        <div class="fade-up" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+
+          <!-- Toolbar -->
+          <div style="padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green-glow);"></div>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--muted);">anaplan_size_estimator.py</span>
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:7px 14px;cursor:pointer;font-family:var(--font-mono);font-size:12px;color:var(--green);transition:all 0.18s;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border2)'">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 9.5V2M7 2L4 5M7 2L10 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11H12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Upload .xlsx export
+              <input type="file" id="tk-file" accept=".xlsx,.xls" style="display:none">
+            </label>
+          </div>
+
+          <!-- Upload hint / file chip -->
+          <div id="tk-hint" style="padding:32px 22px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:12px;line-height:1.8;">
+            Drop your Anaplan module export (.xlsx) to analyse cell counts and model size.<br>
+            <span style="color:var(--muted2);font-size:11px;">Rows where Format / Formula / Summary are blank are treated as module headers and excluded.</span>
+          </div>
+          <div id="tk-chip" style="display:none;padding:8px 22px;border-bottom:1px solid var(--border);">
+            <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(34,211,164,0.08);border:1px solid rgba(34,211,164,0.25);border-radius:99px;padding:4px 12px 4px 9px;font-family:var(--font-mono);font-size:11px;color:var(--green);">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;"></span>
+              <span id="tk-fname"></span>
+            </span>
+          </div>
+
+          <!-- Config row -->
+          <div id="tk-config" style="display:none;padding:12px 22px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <select id="tk-sheet" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:12px;color:var(--text);outline:none;cursor:pointer;"></select>
+            <select id="tk-group" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:12px;color:var(--text);outline:none;cursor:pointer;">
+              <option value="module">Group: Module Name</option>
+              <option value="timeScale">Group: Time Scale</option>
+              <option value="none">No grouping</option>
+            </select>
+            <button id="tk-run" onclick="tkRun()" style="background:var(--green);color:#0a0c10;border:none;border-radius:6px;padding:6px 16px;font-family:var(--font-mono);font-size:12px;font-weight:500;cursor:pointer;">Analyze →</button>
+          </div>
+
+          <!-- Progress -->
+          <div id="tk-prog" style="display:none;height:2px;background:var(--border2);"><div id="tk-progbar" style="height:100%;background:var(--green);width:0;transition:width .3s;"></div></div>
+
+          <!-- KPI row -->
+          <div id="tk-kpis" style="display:none;padding:16px 22px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:4px;">TOTAL SIZE</div>
+              <div id="tk-kpi-size" style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--green);"></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:4px;">TOTAL CELLS</div>
+              <div id="tk-kpi-cells" style="font-family:var(--font-display);font-size:18px;font-weight:700;"></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:4px;">MODULES</div>
+              <div id="tk-kpi-mods" style="font-family:var(--font-display);font-size:18px;font-weight:700;"></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:4px;">LINE ITEMS</div>
+              <div id="tk-kpi-items" style="font-family:var(--font-display);font-size:18px;font-weight:700;"></div>
+            </div>
+          </div>
+
+          <!-- Dist bar -->
+          <div id="tk-dist" style="display:none;padding:14px 22px;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">Size distribution</div>
+            <div id="tk-bar" style="display:flex;height:6px;border-radius:99px;overflow:hidden;gap:2px;margin-bottom:8px;"></div>
+            <div id="tk-leg" style="display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--font-mono);font-size:11px;color:var(--muted);"></div>
+          </div>
+
+          <!-- Filters -->
+          <div id="tk-filters" style="display:none;padding:12px 22px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="tk-search" placeholder="Search module..." oninput="tkFilter()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:12px;color:var(--text);outline:none;min-width:200px;">
+            <select id="tk-tierf" onchange="tkFilter()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:12px;color:var(--text);outline:none;cursor:pointer;">
+              <option value="all">All tiers</option>
+              <option value="XL">XL (&gt;50M)</option>
+              <option value="Large">Large (10–50M)</option>
+              <option value="Medium">Medium (1–10M)</option>
+              <option value="Small">Small (&lt;1M)</option>
+            </select>
+          </div>
+
+          <!-- Table -->
+          <div id="tk-table" style="display:none;overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--surface2);">
+                  <th onclick="tkSort('name')" style="padding:9px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;font-weight:400;white-space:nowrap;">MODULE <span id="sa-name"></span></th>
+                  <th onclick="tkSort('gb')" style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;font-weight:400;white-space:nowrap;">SIZE (GB) <span id="sa-gb"></span></th>
+                  <th onclick="tkSort('cells')" style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;font-weight:400;white-space:nowrap;">CELLS <span id="sa-cells"></span></th>
+                  <th style="padding:9px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap;">% MODEL</th>
+                  <th style="padding:9px 14px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:400;">TIER</th>
+                  <th onclick="tkSort('items')" style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;font-weight:400;">ITEMS <span id="sa-items"></span></th>
+                </tr>
+              </thead>
+              <tbody id="tk-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div id="tk-pg" style="display:none;padding:10px 22px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:12px;color:var(--muted);">
+            <button onclick="tkPage(-1)" id="tk-prev" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:4px 12px;font-family:var(--font-mono);font-size:12px;color:var(--muted);cursor:pointer;">← Prev</button>
+            <span id="tk-pginfo"></span>
+            <button onclick="tkPage(1)" id="tk-next" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:4px 12px;font-family:var(--font-mono);font-size:12px;color:var(--muted);cursor:pointer;">Next →</button>
+          </div>
+
+          <!-- Footer note -->
+          <div style="padding:10px 22px;font-family:var(--font-mono);font-size:10px;color:var(--muted2);line-height:1.7;border-top:1px solid var(--border);">
+            Size = cells × bytes/format ÷ 1,073,741,824 &nbsp;·&nbsp; Boolean: 1b &nbsp;·&nbsp; ENTITY/Date/Time: 4b &nbsp;·&nbsp; Number/Text: 8b &nbsp;·&nbsp; Format dataType parsed from Anaplan JSON export
+          </div>
+
+        </div><!-- end card -->
+      </section>
+
       <!-- CONTACT -->
       <section id="contact">
         <div class="section-header">
@@ -962,6 +1084,159 @@
     b.style.animationPlayState = 'paused';
     barObs.observe(b);
   });
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ── ANAPLAN SIZE ESTIMATOR TOOLKIT ────────────────────────────────────────
+const TK_TIERS=[
+  {l:'XL',    min:50e6, c:'#E24B4A', bg:'rgba(228,75,74,0.15)',  tc:'#f87171'},
+  {l:'Large', min:10e6, c:'#D85A30', bg:'rgba(216,90,48,0.15)',  tc:'#fb923c'},
+  {l:'Medium',min:1e6,  c:'#EF9F27', bg:'rgba(239,159,39,0.15)', tc:'#fbbf24'},
+  {l:'Small', min:0,    c:'#22d3a4', bg:'rgba(34,211,164,0.12)', tc:'#22d3a4'}
+];
+const TK_GB=1073741824;
+let tkWB=null,tkData=[],tkFiltered=[],tkSortKey='gb',tkSortAsc=false,tkCurPage=0;
+const TK_PS=25;
+
+function tkTier(c){return TK_TIERS.find(t=>c>=t.min)||TK_TIERS[3];}
+function tkBPC(fmt){
+  if(!fmt)return 8;
+  try{const o=JSON.parse(fmt);const dt=(o.dataType||'').toUpperCase();
+    if(dt==='BOOLEAN')return 1;
+    if(['ENTITY','TIME_ENTITY','DATE','TIME','TIME_PERIOD'].includes(dt))return 4;
+    return 8;
+  }catch(e){const f=fmt.trim().toUpperCase();
+    if(f==='BOOLEAN')return 1;
+    if(f.includes('DATE')||f.includes('TIME')||f.includes('ENTITY'))return 4;
+    return 8;
+  }
+}
+function tkFmtGB(n){if(n>=1)return n.toFixed(4)+' GB';if(n>=0.001)return(n*1000).toFixed(3)+' MB';return(n*1e6).toFixed(1)+' KB';}
+function tkFmtC(n){if(n>=1e9)return(n/1e9).toFixed(2)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return n.toString();}
+function tkEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+document.getElementById('tk-file').addEventListener('change',function(e){
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  document.getElementById('tk-fname').textContent=f.name;
+  document.getElementById('tk-chip').style.display='block';
+  document.getElementById('tk-hint').style.display='none';
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      tkWB=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const sel=document.getElementById('tk-sheet');
+      sel.innerHTML=tkWB.SheetNames.map((n,i)=>`<option value="${i}">${tkEsc(n)}</option>`).join('');
+      document.getElementById('tk-config').style.display='flex';
+    }catch(err){alert('Could not parse file: '+err.message);}
+  };
+  reader.readAsArrayBuffer(f);
+});
+
+function tkRun(){
+  if(!tkWB)return;
+  const idx=parseInt(document.getElementById('tk-sheet').value)||0;
+  const ws=tkWB.Sheets[tkWB.SheetNames[idx]];
+  const pb=document.getElementById('tk-prog'),bar=document.getElementById('tk-progbar');
+  pb.style.display='block';bar.style.width='30%';
+  setTimeout(function(){
+    const json=XLSX.utils.sheet_to_json(ws,{defval:''});
+    let curMod='(no module)';const groups={};
+    json.forEach(function(row){
+      const fmt=String(row['Format']||'').trim();
+      const frm=String(row['Formula']||'').trim();
+      const sum=String(row['Summary']||'').trim();
+      if(fmt===''&&frm===''&&sum===''){const mn=String(row['Line item names']||'').trim();if(mn)curMod=mn;return;}
+      const cc=parseFloat(String(row['Cell Count']||'').replace(/,/g,''))||0;
+      const bpc=tkBPC(fmt);
+      const mod=String(row['Module Name']||'').trim()||curMod;
+      if(!groups[mod])groups[mod]={cells:0,bytes:0,items:0};
+      groups[mod].cells+=cc;groups[mod].bytes+=cc*bpc;groups[mod].items+=1;
+    });
+    tkData=Object.entries(groups).map(function(e){
+      return{name:e[0],cells:e[1].cells,gb:e[1].bytes/TK_GB,items:e[1].items,tier:tkTier(e[1].cells)};
+    }).sort((a,b)=>b.gb-a.gb);
+    bar.style.width='100%';
+    setTimeout(function(){pb.style.display='none';tkRenderAll();},250);
+  },60);
+}
+
+function tkRenderAll(){
+  const totalGB=tkData.reduce((s,r)=>s+r.gb,0);
+  const totalCells=tkData.reduce((s,r)=>s+r.cells,0);
+  const totalItems=tkData.reduce((s,r)=>s+r.items,0);
+  document.getElementById('tk-kpi-size').textContent=tkFmtGB(totalGB);
+  document.getElementById('tk-kpi-cells').textContent=tkFmtC(totalCells);
+  document.getElementById('tk-kpi-mods').textContent=tkData.length;
+  document.getElementById('tk-kpi-items').textContent=totalItems.toLocaleString();
+  document.getElementById('tk-kpis').style.display='grid';
+  const tbar=document.getElementById('tk-bar'),tleg=document.getElementById('tk-leg');
+  tbar.innerHTML='';tleg.innerHTML='';
+  const tierTotals={XL:0,Large:0,Medium:0,Small:0};
+  tkData.forEach(r=>tierTotals[r.tier.l]+=r.gb);
+  TK_TIERS.forEach(function(t){
+    const pct=totalGB>0?(tierTotals[t.l]/totalGB*100):0;
+    if(pct>0){
+      const seg=document.createElement('div');
+      seg.style.cssText='height:100%;border-radius:2px;min-width:3px;flex-shrink:0;background:'+t.c+';width:'+pct.toFixed(1)+'%';
+      tbar.appendChild(seg);
+      const li=document.createElement('span');
+      li.style.cssText='display:inline-flex;align-items:center;gap:5px;';
+      li.innerHTML='<span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'+t.c+';"></span>'+t.l+': '+tierTotals[t.l].toFixed(3)+' GB ('+pct.toFixed(1)+'%)';
+      tleg.appendChild(li);
+    }
+  });
+  document.getElementById('tk-dist').style.display='block';
+  document.getElementById('tk-filters').style.display='flex';
+  document.getElementById('tk-table').style.display='block';
+  document.getElementById('tk-pg').style.display='flex';
+  tkFilter();
+}
+
+function tkFilter(){
+  const q=(document.getElementById('tk-search').value||'').toLowerCase();
+  const tf=document.getElementById('tk-tierf').value;
+  tkFiltered=tkData.filter(function(r){
+    if(q&&!r.name.toLowerCase().includes(q))return false;
+    if(tf!=='all'&&r.tier.l!==tf)return false;
+    return true;
+  });
+  tkFiltered.sort(function(a,b){
+    if(tkSortKey==='name')return tkSortAsc?a.name.localeCompare(b.name):b.name.localeCompare(a.name);
+    return tkSortAsc?a[tkSortKey]-b[tkSortKey]:b[tkSortKey]-a[tkSortKey];
+  });
+  tkCurPage=0;tkRenderTable();
+}
+
+function tkSort(k){
+  if(tkSortKey===k)tkSortAsc=!tkSortAsc;else{tkSortKey=k;tkSortAsc=false;}
+  ['name','gb','cells','items'].forEach(function(s){
+    const el=document.getElementById('sa-'+s);if(el)el.textContent=tkSortKey===s?(tkSortAsc?'▲':'▼'):'';
+  });
+  tkFilter();
+}
+
+function tkPage(d){tkCurPage+=d;tkRenderTable();}
+
+function tkRenderTable(){
+  const totalGB=tkData.reduce((s,r)=>s+r.gb,0);
+  const start=tkCurPage*TK_PS,end=Math.min(start+TK_PS,tkFiltered.length);
+  document.getElementById('tk-tbody').innerHTML=tkFiltered.slice(start,end).map(function(r){
+    const pct=totalGB>0?Math.min(r.gb/totalGB*100,100):0;
+    return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">'+
+      '<td style="padding:9px 14px;font-weight:500;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+tkEsc(r.name)+'">'+tkEsc(r.name)+'</td>'+
+      '<td style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--green);">'+tkFmtGB(r.gb)+'</td>'+
+      '<td style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:11px;">'+tkFmtC(r.cells)+'</td>'+
+      '<td style="padding:9px 14px;min-width:110px;"><div style="background:var(--surface2);border-radius:99px;height:4px;margin-bottom:3px;"><div style="height:4px;border-radius:99px;background:var(--accent);width:'+pct.toFixed(2)+'%"></div></div><span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">'+pct.toFixed(2)+'%</span></td>'+
+      '<td style="padding:9px 14px;text-align:center;"><span style="font-family:var(--font-mono);font-size:10px;font-weight:500;padding:2px 8px;border-radius:4px;background:'+r.tier.bg+';color:'+r.tier.tc+';">'+r.tier.l+'</span></td>'+
+      '<td style="padding:9px 14px;text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--muted);">'+r.items+'</td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('tk-pginfo').textContent=(start+1)+'–'+end+' of '+tkFiltered.length;
+  const prevBtn=document.getElementById('tk-prev'),nextBtn=document.getElementById('tk-next');
+  prevBtn.disabled=tkCurPage===0;prevBtn.style.opacity=tkCurPage===0?'0.35':'1';
+  nextBtn.disabled=end>=tkFiltered.length;nextBtn.style.opacity=end>=tkFiltered.length?'0.35':'1';
+}
 </script>
 
 </body>
