@@ -1119,394 +1119,160 @@ function tkRenderTable(vm){
 }
 </script>
 <script>// ── FORMULA OPTIMIZER ────────────────────────────────────────────────────────
-var optLineItems = [], optIssues = [], optWB = null;
+var optLineItems=[],optIssues=[],optWB=null;
+function optIfDepth(f){var t=(f.match(/\bIF\b|\bTHEN\b|\bELSE\b|\bENDIF\b/gi)||[]),d=0,mx=0;t.forEach(function(x){if(x.toUpperCase()==='IF'){d++;if(d>mx)mx=d;}else if(x.toUpperCase()==='ENDIF')d--;});return mx;}
+function optExtractConds(f){var c=[],r1=/\bIF\s+(.+?)\s+THEN\b/gi,r2=/\bELSE\s+IF\s+(.+?)\s+THEN\b/gi,m;while((m=r1.exec(f))!==null)c.push(m[1].trim());while((m=r2.exec(f))!==null)c.push(m[1].trim());return c;}
+function optDupConds(f){var c=optExtractConds(f),cnt={},dup={};c.forEach(function(x){cnt[x]=(cnt[x]||0)+1;});Object.keys(cnt).forEach(function(x){if(cnt[x]>1)dup[x]=cnt[x];});return dup;}
+function optEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function optFC(n){return n>=1e9?(n/1e9).toFixed(1)+'B':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1000)+'K':String(n);}
+function kpiBox(lbl,val,col){return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 11px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:2px;">'+lbl+'</div><div style="font-size:16px;font-weight:700;color:'+col+';">'+val+'</div></div>';}
 
-function optIfDepth(formula) {
-  var tokens = (formula.match(/\bIF\b|\bTHEN\b|\bELSE\b|\bENDIF\b/gi) || []);
-  var depth = 0, max = 0;
-  tokens.forEach(function(t) {
-    if (t.toUpperCase() === 'IF') { depth++; if (depth > max) max = depth; }
-    else if (t.toUpperCase() === 'ENDIF') depth--;
-  });
-  return max;
-}
-
-function optEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// ── Rich static suggestion engine ────────────────────────────────────────────
-var OPT_ADVICE = {
-  cross_module: {
-    what: 'The same formula is duplicated across multiple modules. This means the calculation runs independently in each module, multiplying workload and creating maintenance risk if the logic needs to change.',
-    fix: [
-      'Create a single <strong>source module</strong> that owns the calculation. All other modules reference this single line item.',
-      'If the result needs different dimensions in each consumer module, use <strong>COLLECT</strong> to aggregate or <strong>LOOKUP</strong> to project across dimensions.',
-      'Consider using a <strong>Line Item Subset (LIS)</strong> if the result needs to be reused as a dimension.'
-    ],
-    anapedia: 'https://help.anaplan.com/module-design-best-practices-f8813cc9-9e14-4fc5-a45e-05f17d2e0519',
-    ref: 'Anapedia: Module Design Best Practices — Avoid duplicating logic across modules'
-  },
-  duplicate: {
-    what: 'The same formula appears on multiple line items within the same module. Each occurrence calculates independently, consuming extra memory and calculation time proportional to cell count.',
-    fix: [
-      'Consolidate to a single line item and reference it from all other line items that need the value.',
-      'If the line items are used as a dimension, create a <strong>Line Item Subset</strong> and add only the relevant items.',
-      'Use <strong>SUM()</strong> or direct reference instead of repeating the same formula.'
-    ],
-    anapedia: 'https://help.anaplan.com/line-item-subsets-8b9d0eb9-8b36-4699-8b51-d98a01b7613e',
-    ref: 'Anapedia: Line Item Subsets — Reduce redundant calculations'
-  },
-  nested_if: {
-    what: 'Deep IF/THEN/ELSE chains are one of the most common performance issues in Anaplan. Each nested IF evaluates the entire line item\'s cell space, so a depth-N chain can multiply calculation time by N.',
-    fix: [
-      '<strong>Replace with a lookup list:</strong> Create a list with items representing each condition, store the result value as a property, and use LOOKUP to retrieve it. This collapses N IFs into a single lookup.',
-      '<strong>Split into boolean intermediates:</strong> Break each condition into its own Boolean line item, then write the final formula as a simple arithmetic expression referencing those booleans.',
-      '<strong>Use SELECT:</strong> If conditions map to versions or list items, use SELECT instead of IF to filter. SELECT is computed at model load, not at calculation time.',
-      '<strong>Use SWITCH (list-based logic):</strong> If the condition is based on list membership, model it as list properties rather than formula branches.'
-    ],
-    anapedia: 'https://help.anaplan.com/formula-best-practices-7e9f8e9c-5a1d-4f8e-b0c3-9a1b2c3d4e5f',
-    ref: 'Anapedia: Formula Best Practices — Avoid deeply nested IF statements'
-  },
-  lookup: {
-    what: 'LOOKUP performs a cross-dimensional mapping at calculation time. On large line items this is expensive because it must resolve the mapping for every cell. Multiple LOOKUPs on the same line item compound this cost.',
-    fix: [
-      '<strong>Pre-compute the mapping:</strong> If the LOOKUP key is static (e.g. a list property), compute the mapped value once in a small mapping module and reference it directly.',
-      '<strong>Restructure dimensions:</strong> If the LOOKUP is bridging two lists, consider whether the module\'s dimension could be changed to avoid the need for a lookup entirely.',
-      '<strong>Use a SYS module:</strong> Build a System (SYS) module dimensioned by the source list that holds the pre-mapped value. Consumer modules reference the SYS module instead of performing LOOKUP at runtime.',
-      '<strong>Reduce cell count first:</strong> Apply Time Range restrictions and check whether Applies To can be narrowed before optimising the formula.'
-    ],
-    anapedia: 'https://help.anaplan.com/lookup-function-3a2b1c0d-9e8f-7a6b-5c4d-3e2f1a0b9c8d',
-    ref: 'Anapedia: LOOKUP Function — Performance considerations'
-  },
-  heavy: {
-    what: 'This line item has a high cell count combined with a complex formula. Calculation time scales with both cell count and formula complexity — a complex formula on a large item can be the single biggest contributor to model recalc time.',
-    fix: [
-      '<strong>Split the formula:</strong> Break the calculation into 2–3 simpler intermediate line items. Simpler formulas on large items calculate faster than complex ones.',
-      '<strong>Reduce cell count:</strong> Review the Applies To dimension and Time Range. Every list item or time period removed from the dimension reduces cell count proportionally.',
-      '<strong>Defer calculation:</strong> If this item is used for reporting only, consider whether it needs to recalculate on every data change or whether it can be on a slower calculation trigger.',
-      '<strong>Check Is Summary:</strong> Verify whether Summary line items need to recalculate at leaf level. If not, set Summary correctly to reduce the calculation scope.'
-    ],
-    anapedia: 'https://help.anaplan.com/model-optimization-guide-b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e',
-    ref: 'Anapedia: Model Optimisation Guide — Managing large line items'
-  }
+var OPT_ADVICE={
+  cross_module:{what:'Same formula duplicated across multiple modules — each copy calculates independently.',fix:['Create a single <strong>source module</strong> that owns this calculation. All others reference it via cross-module reference.','If dimensions differ, use <strong>COLLECT</strong> to aggregate or <strong>LOOKUP</strong> to project.','Consider a <strong>SYS module</strong> for globally referenced calculations.'],ref:'Anapedia: Module Design Best Practices',url:'https://help.anaplan.com/module-design-best-practices-f8813cc9-9e14-4fc5-a45e-05f17d2e0519'},
+  duplicate:{what:'Same formula on multiple line items in same module — each calculates independently.',fix:['Consolidate to a single line item and reference it from all others.','Use a <strong>Line Item Subset (LIS)</strong> if these items serve as a dimension.','Replace with a direct reference instead of repeating the formula.'],ref:'Anapedia: Line Item Subsets',url:'https://help.anaplan.com/line-item-subsets-8b9d0eb9-8b36-4699-8b51-d98a01b7613e'},
+  nested_if:{what:'Deep IF/THEN/ELSE chains multiply calculation time — each nested level evaluates the full cell space.',fix:['<strong>Lookup list:</strong> Map conditions to results as list properties and use LOOKUP to retrieve — collapses N IFs into one.','<strong>Boolean intermediates:</strong> Break each condition into its own Boolean line item, write final value as arithmetic.','<strong>SELECT:</strong> If conditions map to versions or list items, use SELECT instead of IF (computed at model load, not runtime).'],ref:'Anapedia: Formula Best Practices',url:'https://help.anaplan.com/formula-best-practices'},
+  dup_condition:{what:'The same condition appears multiple times within one formula. Anaplan evaluates it independently each time.',fix:['<strong>Extract to a Boolean line item:</strong> Compute the condition once as TRUE/FALSE, then reference that line item.','Example: instead of <code>IF A&gt;0 THEN x ELSE IF A&gt;0 THEN y</code> create <code>A Is Positive = A&gt;0</code> and reference it.','This is the highest-impact quick-win optimisation for complex IF chains.'],ref:'Anapedia: Formula Best Practices',url:'https://help.anaplan.com/formula-best-practices'},
+  lookup:{what:'LOOKUP performs cross-dimensional mapping at calculation time. On large items it resolves the mapping for every cell.',fix:['<strong>Pre-compute in a SYS module:</strong> Dimensioned by the source list, holds the pre-mapped value. Consumers reference directly.','<strong>Restructure dimensions:</strong> Consider whether the module dimension can be changed to eliminate the LOOKUP.','<strong>Reduce cell count first:</strong> Apply Time Range restrictions and narrow Applies To before formula changes.'],ref:'Anapedia: LOOKUP Function',url:'https://help.anaplan.com/lookup-function'},
+  heavy:{what:'High cell count combined with complex formula — often the biggest contributor to model recalc time.',fix:['<strong>Split the formula</strong> into 2-3 simpler intermediate line items.','<strong>Reduce cell count:</strong> Every list item or time period removed reduces cells proportionally.','<strong>Check Is Summary:</strong> Verify summary line items only recalculate at the correct scope.'],ref:'Anapedia: Model Optimisation Guide',url:'https://help.anaplan.com/model-optimization'}
 };
 
-function optRenderAdvice(type, iss) {
-  var adv = OPT_ADVICE[type] || OPT_ADVICE.heavy;
-  var fixItems = adv.fix.map(function(f, i) {
-    return '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-      '<span style="font-family:var(--font-mono);font-size:10px;color:var(--purple);font-weight:700;flex-shrink:0;margin-top:2px;">' + (i+1) + '.</span>' +
-      '<span style="font-size:12px;line-height:1.7;color:var(--text);">' + f + '</span>' +
-    '</div>';
-  }).join('');
-  return '<div style="margin-top:10px;background:var(--surface2);border:1px solid rgba(167,139,250,0.2);border-radius:8px;padding:14px 16px;">' +
-    '<div style="font-family:var(--font-mono);font-size:10px;color:var(--purple);letter-spacing:.06em;margin-bottom:10px;">ROOT CAUSE</div>' +
-    '<p style="font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:14px;">' + adv.what + '</p>' +
-    '<div style="font-family:var(--font-mono);font-size:10px;color:var(--green);letter-spacing:.06em;margin-bottom:10px;">RECOMMENDED FIXES</div>' +
-    fixItems +
-    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">' +
-      '<a href="' + adv.anapedia + '" target="_blank" style="font-family:var(--font-mono);font-size:10px;color:var(--purple);text-decoration:none;">' +
-        '↗ ' + adv.ref +
-      '</a>' +
-    '</div>' +
-  '</div>';
+function optAdviceBlock(type){
+  var a=OPT_ADVICE[type]||OPT_ADVICE.heavy;
+  var fixes=a.fix.map(function(f,i){return '<div style="display:flex;gap:7px;margin-bottom:7px;"><span style="font-family:var(--font-mono);font-size:10px;color:var(--purple);font-weight:700;flex-shrink:0;margin-top:2px;">'+(i+1)+'.</span><span style="font-size:12px;line-height:1.6;color:var(--text);">'+f+'</span></div>';}).join('');
+  return '<div style="margin-top:9px;background:var(--surface2);border:1px solid rgba(167,139,250,0.2);border-radius:8px;padding:11px 13px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:7px;">ROOT CAUSE &mdash; '+a.what+'</div>'+fixes+'<div style="margin-top:9px;padding-top:7px;border-top:1px solid var(--border);"><a href="'+a.url+'" target="_blank" style="font-family:var(--font-mono);font-size:10px;color:var(--purple);text-decoration:none;">&#8599; '+a.ref+'</a></div></div>';
 }
 
-document.getElementById('opt-file').addEventListener('change', function(e) {
-  var f = e.target.files && e.target.files[0]; if (!f) return;
-  document.getElementById('opt-fname').textContent = f.name;
-  document.getElementById('opt-chip').style.display = 'block';
-  document.getElementById('opt-hint').style.display = 'none';
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      optWB = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
-      optParse(optWB.Sheets[optWB.SheetNames[0]]);
-    } catch(err) { alert('Could not parse: ' + err.message); }
-  };
+document.getElementById('opt-file').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  document.getElementById('opt-fname').textContent=f.name;
+  document.getElementById('opt-chip').style.display='block';
+  document.getElementById('opt-hint').style.display='none';
+  var reader=new FileReader();
+  reader.onload=function(ev){try{optWB=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});optParse(optWB.Sheets[optWB.SheetNames[0]]);}catch(err){alert('Could not parse: '+err.message);}};
   reader.readAsArrayBuffer(f);
 });
 
-function optParse(ws) {
-  var json = XLSX.utils.sheet_to_json(ws, {defval:''});
-  var curMod = '(no module)', curModLists = [];
-  optLineItems = [];
-
-  json.forEach(function(row) {
-    var fmt = String(row['Format']||'').trim();
-    var frm = String(row['Formula']||'').trim();
-    var sm  = String(row['Summary']||'').trim();
-    if (fmt===''&&frm===''&&sm==='') {
-      curMod = String(row['Line item names']||'').trim()||curMod;
-      var hat = String(row['Applies To']||'').trim();
-      curModLists = (hat&&hat!=='-') ? hat.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
-      return;
-    }
-    var rawAt = String(row['Applies To']||'').trim();
-    var lists = rawAt==='-' ? curModLists.slice() : rawAt==='' ? [] : rawAt.split(',').map(function(s){return s.trim();}).filter(Boolean);
-    var cc = parseFloat(String(row['Cell Count']||'').replace(/,/g,''))||0;
-    optLineItems.push({
-      name:    String(row['Line item names']||'').trim(),
-      module:  String(row['Module Name']||'').trim() || curMod,
-      formula: frm,
-      format:  fmt,
-      lists:   lists,
-      cc:      cc,
-      ifDepth: frm ? optIfDepth(frm) : 0
-    });
+function optParse(ws){
+  var json=XLSX.utils.sheet_to_json(ws,{defval:''});
+  var curMod='(no module)',curML=[];
+  optLineItems=[];
+  json.forEach(function(row){
+    var fmt=String(row['Format']||'').trim(),frm=String(row['Formula']||'').trim(),sm=String(row['Summary']||'').trim();
+    if(fmt===''&&frm===''&&sm===''){curMod=String(row['Line item names']||'').trim()||curMod;var hat=String(row['Applies To']||'').trim();curML=(hat&&hat!=='-')?hat.split(',').map(function(s){return s.trim();}).filter(Boolean):[];return;}
+    var rawAt=String(row['Applies To']||'').trim();
+    var lists=rawAt==='-'?curML.slice():rawAt===''?[]:rawAt.split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var cc=parseFloat(String(row['Cell Count']||'').replace(/,/g,''))||0;
+    optLineItems.push({name:String(row['Line item names']||'').trim(),module:String(row['Module Name']||'').trim()||curMod,formula:frm,format:fmt,lists:lists,cc:cc,ifDepth:frm?optIfDepth(frm):0,dupConds:frm?optDupConds(frm):{}});
   });
-
   optBuildIssues();
 }
 
-function optBuildIssues() {
-  optIssues = [];
-  var hasFormula = optLineItems.filter(function(li) { return li.formula; });
-  var formulaMap = {};
+function optBuildIssues(){
+  optIssues=[];
+  var hF=optLineItems.filter(function(li){return li.formula;}),fMap={},triv=['TRUE','FALSE','1','0','-1','""','0.0'];
+  hF.forEach(function(li){if(!fMap[li.formula])fMap[li.formula]=[];fMap[li.formula].push(li);});
+  Object.keys(fMap).forEach(function(f){var items=fMap[f];if(items.length<2||triv.indexOf(f)>=0)return;var mods=Array.from(new Set(items.map(function(i){return i.module;})));var cx=mods.length>1;optIssues.push({type:cx?'cross_module':'duplicate',severity:cx?'high':'medium',title:(cx?'Cross-module duplicate':'Duplicate formula')+' - '+items.length+' occurrences / '+mods.length+' module(s)',formula:f,items:items,modules:mods,extra:null});});
+  hF.forEach(function(li){if(li.ifDepth<3)return;optIssues.push({type:'nested_if',severity:li.ifDepth>=6?'high':'medium',title:'Nested IF depth '+li.ifDepth+' - ['+li.module+'] '+li.name,formula:li.formula,items:[li],modules:[li.module],extra:null});});
+  hF.forEach(function(li){if(!Object.keys(li.dupConds).length)return;optIssues.push({type:'dup_condition',severity:'high',title:'Duplicate conditions in formula - ['+li.module+'] '+li.name,formula:li.formula,items:[li],modules:[li.module],extra:{dupConds:li.dupConds}});});
+  hF.forEach(function(li){if(!li.formula.toUpperCase().includes('LOOKUP')||li.cc<500000)return;optIssues.push({type:'lookup',severity:li.cc>5000000?'high':'medium',title:'LOOKUP on '+optFC(li.cc)+' cell item - ['+li.module+'] '+li.name,formula:li.formula,items:[li],modules:[li.module],extra:null});});
+  hF.forEach(function(li){if(li.cc<1000000||(li.ifDepth<2&&!li.formula.toUpperCase().includes('LOOKUP')))return;var al=optIssues.some(function(iss){return iss.type!=='cross_module'&&iss.type!=='duplicate'&&iss.items.indexOf(li)>=0;});if(al)return;optIssues.push({type:'heavy',severity:'medium',title:'Complex formula on '+optFC(li.cc)+' cell item - ['+li.module+'] '+li.name,formula:li.formula,items:[li],modules:[li.module],extra:null});});
+  optIssues.sort(function(a,b){var sv={high:0,medium:1,low:2};if(sv[a.severity]!==sv[b.severity])return sv[a.severity]-sv[b.severity];return b.items.reduce(function(s,i){return s+i.cc;},0)-a.items.reduce(function(s,i){return s+i.cc;},0);});
 
-  hasFormula.forEach(function(li) {
-    if (!formulaMap[li.formula]) formulaMap[li.formula] = [];
-    formulaMap[li.formula].push(li);
-  });
+  document.getElementById('opt-s-total').textContent=hF.length.toLocaleString();
+  document.getElementById('opt-s-dupes').textContent=optIssues.filter(function(i){return i.type==='duplicate'||i.type==='cross_module';}).length;
+  document.getElementById('opt-s-nested').textContent=optIssues.filter(function(i){return i.type==='nested_if'||i.type==='dup_condition';}).length;
+  document.getElementById('opt-s-lookup').textContent=hF.filter(function(li){return li.formula.toUpperCase().includes('LOOKUP');}).length;
+  document.getElementById('opt-s-xmod').textContent=optIssues.filter(function(i){return i.type==='cross_module';}).length;
+  document.getElementById('opt-stats').style.display='grid';
 
-  // 1. Duplicates & cross-module duplicates
-  var trivial = ['TRUE','FALSE','1','0','-1','""','0.0'];
-  Object.keys(formulaMap).forEach(function(f) {
-    var items = formulaMap[f];
-    if (items.length < 2 || trivial.indexOf(f) >= 0) return;
-    var mods = Array.from(new Set(items.map(function(i){return i.module;})));
-    var isCross = mods.length > 1;
-    optIssues.push({
-      type: isCross ? 'cross_module' : 'duplicate',
-      severity: isCross ? 'high' : 'medium',
-      title: (isCross ? 'Cross-module duplicate' : 'Duplicate formula') + ' — ' + items.length + ' occurrences across ' + mods.length + ' module(s)',
-      formula: f,
-      items: items,
-      modules: mods
-    });
-  });
+  var mods=Array.from(new Set(optLineItems.map(function(li){return li.module;}))).sort();
+  document.getElementById('opt-module').innerHTML='<option value="">All modules</option>'+mods.map(function(m){return '<option value="'+optEsc(m)+'">'+optEsc(m)+'</option>';}).join('');
 
-  // 2. Deep nested IFs
-  hasFormula.forEach(function(li) {
-    if (li.ifDepth < 3) return;
-    optIssues.push({
-      type: 'nested_if',
-      severity: li.ifDepth >= 6 ? 'high' : 'medium',
-      title: 'Nested IF depth ' + li.ifDepth + ' — [' + li.module + '] ' + li.name,
-      formula: li.formula,
-      items: [li],
-      modules: [li.module]
-    });
-  });
-
-  // 3. LOOKUP on large items
-  hasFormula.forEach(function(li) {
-    if (!li.formula.toUpperCase().includes('LOOKUP') || li.cc < 500000) return;
-    optIssues.push({
-      type: 'lookup',
-      severity: li.cc > 5000000 ? 'high' : 'medium',
-      title: 'LOOKUP on ' + (li.cc/1e6).toFixed(1) + 'M cell item — [' + li.module + '] ' + li.name,
-      formula: li.formula,
-      items: [li],
-      modules: [li.module]
-    });
-  });
-
-  // 4. Heavy items
-  hasFormula.forEach(function(li) {
-    if (li.cc < 1000000) return;
-    if (li.ifDepth < 2 && !li.formula.toUpperCase().includes('LOOKUP')) return;
-    var already = optIssues.some(function(iss) { return iss.items.indexOf(li) >= 0; });
-    if (already) return;
-    optIssues.push({
-      type: 'heavy',
-      severity: 'medium',
-      title: 'Complex formula on ' + (li.cc/1e6).toFixed(1) + 'M cell item — [' + li.module + '] ' + li.name,
-      formula: li.formula,
-      items: [li],
-      modules: [li.module]
-    });
-  });
-
-  // Sort: high first, then by total cell count
-  optIssues.sort(function(a,b) {
-    var sv = {high:0, medium:1, low:2};
-    if (sv[a.severity] !== sv[b.severity]) return sv[a.severity]-sv[b.severity];
-    var ac = a.items.reduce(function(s,i){return s+i.cc;},0);
-    var bc = b.items.reduce(function(s,i){return s+i.cc;},0);
-    return bc-ac;
-  });
-
-  // Stats
-  var dupeCount   = optIssues.filter(function(i){return i.type==='duplicate';}).length;
-  var xmodCount   = optIssues.filter(function(i){return i.type==='cross_module';}).length;
-  var nestedCount = optIssues.filter(function(i){return i.type==='nested_if';}).length;
-  var lookupCount = optLineItems.filter(function(li){return li.formula&&li.formula.toUpperCase().includes('LOOKUP');}).length;
-
-  document.getElementById('opt-s-total').textContent  = hasFormula.length.toLocaleString();
-  document.getElementById('opt-s-dupes').textContent  = (dupeCount+xmodCount).toString();
-  document.getElementById('opt-s-nested').textContent = nestedCount.toString();
-  document.getElementById('opt-s-lookup').textContent = lookupCount.toString();
-  document.getElementById('opt-s-xmod').textContent   = xmodCount.toString();
-  document.getElementById('opt-stats').style.display  = 'grid';
-
-  var mods = Array.from(new Set(optLineItems.map(function(li){return li.module;}))).sort();
-  var msel = document.getElementById('opt-module');
-  msel.innerHTML = '<option value="">All modules</option>' + mods.map(function(m){
-    return '<option value="'+optEsc(m)+'">'+optEsc(m)+'</option>';
-  }).join('');
-
-  document.getElementById('opt-controls').style.display = 'flex';
-  document.getElementById('opt-issues').style.display = 'block';
+  var sel=document.getElementById('opt-filter');
+  if(sel&&!sel.querySelector('option[value="dup_condition"]')){var opt=document.createElement('option');opt.value='dup_condition';opt.textContent='Duplicate conditions';sel.appendChild(opt);}
+  document.getElementById('opt-controls').style.display='flex';
+  document.getElementById('opt-issues').style.display='block';
   optRenderIssues();
 }
 
-var SEV_STYLE = {
-  high:   {bg:'rgba(228,75,74,0.08)',   bc:'rgba(228,75,74,0.4)',   tc:'#f87171',  label:'High'},
-  medium: {bg:'rgba(239,159,39,0.08)',  bc:'rgba(239,159,39,0.4)',  tc:'#fbbf24',  label:'Medium'},
-  low:    {bg:'rgba(100,116,139,0.08)', bc:'rgba(100,116,139,0.3)', tc:'var(--muted)', label:'Low'}
-};
-var TYPE_LABEL  = {duplicate:'Duplicate', cross_module:'Cross-module', nested_if:'Nested IF', lookup:'LOOKUP', heavy:'Heavy'};
-var TYPE_COLOR  = {duplicate:'#f59e0b', cross_module:'#f87171', nested_if:'#fb923c', lookup:'#60a5fa', heavy:'#a78bfa'};
+var SEV_STYLE={high:{bg:'rgba(228,75,74,0.07)',bc:'rgba(228,75,74,0.45)',tc:'#f87171',label:'High'},medium:{bg:'rgba(239,159,39,0.07)',bc:'rgba(239,159,39,0.45)',tc:'#fbbf24',label:'Medium'},low:{bg:'transparent',bc:'var(--border)',tc:'var(--muted)',label:'Low'}};
+var TYPE_LABEL={duplicate:'Duplicate',cross_module:'Cross-module',nested_if:'Nested IF',dup_condition:'Dup Condition',lookup:'LOOKUP',heavy:'Heavy'};
+var TYPE_COLOR={duplicate:'#f59e0b',cross_module:'#f87171',nested_if:'#fb923c',dup_condition:'#e879f9',lookup:'#60a5fa',heavy:'#a78bfa'};
+var optCurPg=0,optPgSz=50,optLastF=[];
 
-function optRenderIssues() {
-  var typeF = document.getElementById('opt-filter').value;
-  var modF  = document.getElementById('opt-module').value;
-  var filtered = optIssues.filter(function(iss) {
-    if (typeF !== 'all' && iss.type !== typeF) return false;
-    if (modF && iss.modules.indexOf(modF) < 0) return false;
-    return true;
-  });
+function optRenderIssues(){
+  var tF=document.getElementById('opt-filter').value,mF=document.getElementById('opt-module').value;
+  optLastF=optIssues.filter(function(iss){if(tF!=='all'&&iss.type!==tF)return false;if(mF&&iss.modules.indexOf(mF)<0)return false;return true;});
+  optCurPg=0;optDrawPg();
+}
 
-  var container = document.getElementById('opt-issues');
-  if (!filtered.length) {
-    container.innerHTML = '<div style="padding:24px 22px;font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;">No issues match current filters</div>';
-    return;
-  }
-
-  container.innerHTML = filtered.slice(0,80).map(function(iss, idx) {
-    var sev = SEV_STYLE[iss.severity] || SEV_STYLE.low;
-    var affected = iss.items.slice(0,4).map(function(i){
-      return '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px;">' +
-        '<span style="color:var(--muted2);">['+optEsc(i.module.slice(0,35))+']</span> ' + optEsc(i.name) +
-        (i.cc > 0 ? ' <span style="color:var(--muted2);">('+Math.round(i.cc/1000)+'K cells)</span>' : '') +
-      '</div>';
-    }).join('') + (iss.items.length > 4 ? '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted2);margin-top:3px;">...and '+(iss.items.length-4)+' more</div>' : '');
-
-    var fPreview = iss.formula.length > 220 ? iss.formula.slice(0,220)+'…' : iss.formula;
-
-    return '<div style="padding:14px 18px;border-bottom:1px solid var(--border);background:'+sev.bg+';border-left:3px solid '+sev.bc+';">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
-        '<span style="font-family:var(--font-mono);font-size:10px;font-weight:500;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.2);color:'+TYPE_COLOR[iss.type]+';">'+TYPE_LABEL[iss.type]+'</span>' +
-        '<span style="font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,0.15);color:'+sev.tc+';">'+sev.label+'</span>' +
-        '<span style="font-size:12px;font-weight:500;color:var(--text);flex:1;">'+optEsc(iss.title)+'</span>' +
-        '<button onclick="optToggleDetail('+idx+')" id="opt-btn-'+idx+'" style="background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);border-radius:5px;padding:3px 10px;font-family:var(--font-mono);font-size:10px;color:var(--purple);cursor:pointer;flex-shrink:0;">View fix ↓</button>' +
-      '</div>' +
-      affected +
-      '<div style="margin-top:8px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;font-family:var(--font-mono);font-size:10px;color:var(--muted);line-height:1.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+optEsc(fPreview)+'</div>' +
-      '<div id="opt-detail-'+idx+'" style="display:none;">' + optRenderAdvice(iss.type, iss) + '</div>' +
+function optDrawPg(){
+  var f=optLastF,c=document.getElementById('opt-issues');
+  if(!f.length){c.innerHTML='<div style="padding:20px 14px;font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;">No issues match current filters</div>';return;}
+  var s=optCurPg*optPgSz,e=Math.min(s+optPgSz,f.length);
+  c.innerHTML=f.slice(s,e).map(function(iss,li){
+    var gi=s+li,sev=SEV_STYLE[iss.severity]||SEV_STYLE.low;
+    var aff=iss.items.map(function(i){return '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5;word-break:break-all;"><span style="color:var(--muted2);">['+optEsc(i.module)+']</span> '+optEsc(i.name)+(i.cc>0?' <span style="color:var(--muted2);">('+optFC(i.cc)+' cells)</span>':'')+' </div>';}).join('');
+    var dcH='';
+    if(iss.type==='dup_condition'&&iss.extra&&iss.extra.dupConds){dcH='<div style="margin-top:7px;background:rgba(232,121,249,0.06);border:1px solid rgba(232,121,249,0.2);border-radius:6px;padding:7px 10px;"><div style="font-family:var(--font-mono);font-size:10px;color:#e879f9;margin-bottom:5px;">DUPLICATE CONDITIONS</div>'+Object.keys(iss.extra.dupConds).map(function(cond){return '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:3px;word-break:break-all;"><span style="color:#e879f9;font-weight:700;">('+iss.extra.dupConds[cond]+'x)</span> '+optEsc(cond)+'</div>';}).join('')+'</div>';}
+    var fp=iss.formula.length>260?iss.formula.slice(0,260)+'...':iss.formula;
+    return '<div style="padding:10px 13px;border-bottom:1px solid var(--border);background:'+sev.bg+';border-left:3px solid '+sev.bc+';">'+
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">'+
+        '<span style="font-family:var(--font-mono);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:rgba(0,0,0,0.2);color:'+TYPE_COLOR[iss.type]+';">'+TYPE_LABEL[iss.type]+'</span>'+
+        '<span style="font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(0,0,0,0.15);color:'+sev.tc+';">'+sev.label+'</span>'+
+        '<span style="font-size:11px;font-weight:500;color:var(--text);flex:1;min-width:0;word-break:break-word;">'+optEsc(iss.title)+'</span>'+
+        '<button onclick="optToggle('+gi+')" id="opt-btn-'+gi+'" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);border-radius:5px;padding:2px 8px;font-family:var(--font-mono);font-size:10px;color:var(--purple);cursor:pointer;flex-shrink:0;white-space:nowrap;">Fix</button>'+
+      '</div>'+aff+dcH+
+      '<div style="margin-top:5px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;padding:5px 8px;font-family:var(--font-mono);font-size:10px;color:var(--muted);line-height:1.55;word-break:break-all;">'+optEsc(fp)+'</div>'+
+      '<div id="opt-detail-'+gi+'" style="display:none;">'+optAdviceBlock(iss.type)+'</div>'+
     '</div>';
   }).join('');
-
-  if (filtered.length > 80) {
-    container.innerHTML += '<div style="padding:12px 22px;font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;">Showing 80 of '+filtered.length+' issues</div>';
-  }
+  c.innerHTML+='<div style="padding:8px 13px;display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;color:var(--muted);border-top:1px solid var(--border);">'+
+    '<button onclick="optPrevPg()" '+(optCurPg===0?'disabled':'')+' style="background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px 8px;font-family:var(--font-mono);font-size:11px;color:var(--muted);cursor:pointer;opacity:'+(optCurPg===0?'.4':'1')+'">Prev</button>'+
+    '<span>'+(s+1)+'-'+e+' of '+f.length+' issues</span>'+
+    '<button onclick="optNextPg()" '+(e>=f.length?'disabled':'')+' style="background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px 8px;font-family:var(--font-mono);font-size:11px;color:var(--muted);cursor:pointer;opacity:'+(e>=f.length?'.4':'1')+'">Next</button>'+
+  '</div>';
 }
 
-function optToggleDetail(idx) {
-  var el  = document.getElementById('opt-detail-'+idx);
-  var btn = document.getElementById('opt-btn-'+idx);
-  if (!el) return;
-  var open = el.style.display === 'none';
-  el.style.display  = open ? 'block' : 'none';
-  btn.textContent   = open ? 'Hide ↑' : 'View fix ↓';
-}
+function optPrevPg(){if(optCurPg>0){optCurPg--;optDrawPg();}}
+function optNextPg(){if((optCurPg+1)*optPgSz<optLastF.length){optCurPg++;optDrawPg();}}
+function optToggle(idx){var el=document.getElementById('opt-detail-'+idx),btn=document.getElementById('opt-btn-'+idx);if(!el)return;var open=el.style.display==='none';el.style.display=open?'block':'none';btn.textContent=open?'Hide':'Fix';}
 
-function optAnalyseAll() {
-  var typeF = document.getElementById('opt-filter').value;
-  var modF  = document.getElementById('opt-module').value;
-  var filtered = optIssues.filter(function(iss) {
-    if (typeF !== 'all' && iss.type !== typeF) return false;
-    if (modF && iss.modules.indexOf(modF) < 0) return false;
-    return true;
-  });
-  if (!filtered.length) return;
+function optAnalyseAll(){
+  var tF=document.getElementById('opt-filter').value,mF=document.getElementById('opt-module').value;
+  var filtered=optIssues.filter(function(iss){if(tF!=='all'&&iss.type!==tF)return false;if(mF&&iss.modules.indexOf(mF)<0)return false;return true;});
+  if(!filtered.length)return;
+  var panel=document.getElementById('opt-ai-panel'),content=document.getElementById('opt-ai-content');
+  panel.style.display='block';panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  var cnt={};['cross_module','duplicate','nested_if','dup_condition','lookup','heavy'].forEach(function(t){cnt[t]=0;});
+  filtered.forEach(function(i){if(cnt[i.type]!==undefined)cnt[i.type]++;});
+  var totC=filtered.reduce(function(s,i){return s+i.items.reduce(function(ss,li){return ss+li.cc;},0);},0);
+  var hiC=filtered.filter(function(i){return i.severity==='high';}).length;
 
-  var panel   = document.getElementById('opt-ai-panel');
-  var content = document.getElementById('opt-ai-content');
-  panel.style.display = 'block';
-  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  var sumH='<div style="margin-bottom:14px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--purple);letter-spacing:.08em;margin-bottom:8px;">SUMMARY</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px;">'+kpiBox('TOTAL ISSUES',filtered.length,'#f87171')+kpiBox('HIGH SEVERITY',hiC,'var(--amber)')+kpiBox('CELLS AFFECTED',optFC(totC),'var(--green)')+'</div>'+
+    '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.9;">'+
+      (cnt.cross_module ?'<div>&#9888; <strong style="color:#f87171;">'+cnt.cross_module+'</strong> cross-module duplicates</div>':'')+
+      (cnt.duplicate    ?'<div>&#9888; <strong style="color:var(--amber);">'+cnt.duplicate+'</strong> same-module duplicates</div>':'')+
+      (cnt.nested_if    ?'<div>&#9888; <strong style="color:#fb923c;">'+cnt.nested_if+'</strong> deeply nested IF chains</div>':'')+
+      (cnt.dup_condition?'<div>&#9888; <strong style="color:#e879f9;">'+cnt.dup_condition+'</strong> duplicate conditions in formulas</div>':'')+
+      (cnt.lookup       ?'<div>&#9888; <strong style="color:#60a5fa;">'+cnt.lookup+'</strong> LOOKUP on large items</div>':'')+
+      (cnt.heavy        ?'<div>&#9888; <strong style="color:#a78bfa;">'+cnt.heavy+'</strong> complex formulas on large items</div>':'')+
+    '</div></div>';
 
-  // Count by type
-  var counts = {cross_module:0, duplicate:0, nested_if:0, lookup:0, heavy:0};
-  filtered.forEach(function(i){ if(counts[i.type]!==undefined) counts[i.type]++; });
-  var totalCells = filtered.reduce(function(s,i){
-    return s + i.items.reduce(function(ss,li){return ss+li.cc;},0);
-  },0);
-  var highCount = filtered.filter(function(i){return i.severity==='high';}).length;
-
-  // Build summary report
-  var summaryHtml =
-    '<div style="margin-bottom:18px;">' +
-      '<div style="font-family:var(--font-mono);font-size:10px;color:var(--purple);letter-spacing:.08em;margin-bottom:10px;">SUMMARY</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">' +
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:3px;">TOTAL ISSUES</div><div style="font-size:18px;font-weight:700;color:#f87171;">'+filtered.length+'</div></div>' +
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:3px;">HIGH SEVERITY</div><div style="font-size:18px;font-weight:700;color:var(--amber);">'+highCount+'</div></div>' +
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;"><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:3px;">CELLS AFFECTED</div><div style="font-size:18px;font-weight:700;color:var(--green);">'+(totalCells>=1e9?(totalCells/1e9).toFixed(1)+'B':totalCells>=1e6?(totalCells/1e6).toFixed(0)+'M':totalCells>=1e3?(totalCells/1e3).toFixed(0)+'K':totalCells)+'</div></div>' +
-      '</div>' +
-      '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.8;">' +
-        (counts.cross_module ? '<div>⚠ <strong style="color:#f87171;">'+counts.cross_module+'</strong> cross-module duplicates — highest priority to resolve</div>' : '') +
-        (counts.duplicate    ? '<div>⚠ <strong style="color:var(--amber);">'+counts.duplicate+'</strong> same-module duplicates</div>' : '') +
-        (counts.nested_if    ? '<div>⚠ <strong style="color:#fb923c;">'+counts.nested_if+'</strong> deeply nested IF chains</div>' : '') +
-        (counts.lookup       ? '<div>⚠ <strong style="color:#60a5fa;">'+counts.lookup+'</strong> LOOKUP on large line items</div>' : '') +
-        (counts.heavy        ? '<div>⚠ <strong style="color:#a78bfa;">'+counts.heavy+'</strong> complex formulas on large items</div>' : '') +
-      '</div>' +
-    '</div>';
-
-  // Build per-type sections
-  var typeSections = '';
-  var typeOrder = ['cross_module','duplicate','nested_if','lookup','heavy'];
-  typeOrder.forEach(function(type) {
-    var typeIssues = filtered.filter(function(i){return i.type===type;});
-    if (!typeIssues.length) return;
-    var adv = OPT_ADVICE[type];
-    var topItems = typeIssues.slice(0,5).map(function(iss){
-      var topLI = iss.items.slice(0,3).map(function(li){
-        return '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;">'+
-          '<span style="color:var(--muted2);">['+optEsc(li.module.slice(0,30))+']</span> '+optEsc(li.name)+
-          (li.cc>0?' <span style="color:var(--muted2);">('+Math.round(li.cc/1000)+'K cells)</span>':'')+
-        '</div>';
-      }).join('') + (iss.items.length>3?'<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted2);">...+'+(iss.items.length-3)+' more</div>':'');
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;margin-bottom:6px;">'+
-        '<div style="font-size:11px;font-weight:500;color:var(--text);margin-bottom:4px;">'+optEsc(iss.title)+'</div>'+
-        topLI+
-        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+optEsc(iss.formula.slice(0,180))+'</div>'+
-      '</div>';
+  var typeOrder=['cross_module','duplicate','dup_condition','nested_if','lookup','heavy'];
+  var sections=typeOrder.map(function(type){
+    var ti=filtered.filter(function(i){return i.type===type;});if(!ti.length)return '';
+    var adv=OPT_ADVICE[type];
+    var fixes=adv.fix.map(function(f,i){return '<div style="display:flex;gap:7px;margin-bottom:6px;"><span style="font-family:var(--font-mono);font-size:10px;color:var(--purple);font-weight:700;flex-shrink:0;margin-top:2px;">'+(i+1)+'.</span><span style="font-size:12px;line-height:1.6;color:var(--text);">'+f+'</span></div>';}).join('');
+    var examples=ti.map(function(iss){
+      var iList=iss.items.map(function(li){return '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;word-break:break-all;"><span style="color:var(--muted2);">['+optEsc(li.module)+']</span> '+optEsc(li.name)+(li.cc>0?' <span style="color:var(--muted2);">('+optFC(li.cc)+' cells)</span>':'')+' </div>';}).join('');
+      var dc=(type==='dup_condition'&&iss.extra&&iss.extra.dupConds)?'<div style="margin-top:3px;">'+Object.keys(iss.extra.dupConds).map(function(c){return '<div style="font-family:var(--font-mono);font-size:10px;color:#e879f9;word-break:break-all;">('+iss.extra.dupConds[c]+'x) '+optEsc(c)+'</div>';}).join('')+'</div>':'';
+      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:5px;padding:7px 9px;margin-bottom:5px;"><div style="font-size:11px;font-weight:500;color:var(--text);margin-bottom:2px;word-break:break-word;">'+optEsc(iss.title)+'</div>'+iList+dc+'<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px;word-break:break-all;line-height:1.5;">'+optEsc(iss.formula.slice(0,180))+'</div></div>';
     }).join('');
-
-    var fixHtml = adv.fix.map(function(f,i){
-      return '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
-        '<span style="font-family:var(--font-mono);font-size:10px;color:var(--purple);font-weight:700;flex-shrink:0;margin-top:2px;">'+(i+1)+'.</span>'+
-        '<span style="font-size:12px;line-height:1.7;color:var(--text);">'+f+'</span>'+
-      '</div>';
-    }).join('');
-
-    typeSections +=
-      '<div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border);">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
-          '<span style="font-family:var(--font-mono);font-size:10px;font-weight:600;padding:3px 10px;border-radius:4px;background:rgba(0,0,0,0.2);color:'+TYPE_COLOR[type]+';">'+TYPE_LABEL[type]+' ('+typeIssues.length+')</span>' +
-        '</div>' +
-        '<p style="font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:12px;">'+adv.what+'</p>' +
-        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--green);letter-spacing:.06em;margin-bottom:10px;">RECOMMENDED FIXES</div>' +
-        fixHtml +
-        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--purple);margin-bottom:12px;">' +
-          '<a href="'+adv.anapedia+'" target="_blank" style="color:var(--purple);text-decoration:none;">↗ '+adv.ref+'</a>' +
-        '</div>' +
-        '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:8px;">TOP EXAMPLES</div>' +
-        topItems +
-      '</div>';
-  });
-
-  content.innerHTML = summaryHtml + typeSections;
+    return '<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);"><div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,0.2);color:'+TYPE_COLOR[type]+';">'+TYPE_LABEL[type]+' ('+ti.length+')</span></div><p style="font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:8px;">'+adv.what+'</p><div style="font-family:var(--font-mono);font-size:10px;color:var(--green);letter-spacing:.06em;margin-bottom:7px;">FIXES</div>'+fixes+'<div style="margin:7px 0;"><a href="'+adv.url+'" target="_blank" style="font-family:var(--font-mono);font-size:10px;color:var(--purple);text-decoration:none;">&#8599; '+adv.ref+'</a></div><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:6px;">ALL '+ti.length+' ISSUES</div>'+examples+'</div>';
+  }).join('');
+  content.innerHTML=sumH+sections;
 }</script>
 </body>
 </html>
